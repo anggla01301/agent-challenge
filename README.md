@@ -1,3 +1,95 @@
+# 🔥 SolRoast — AI Solana Wallet Roaster
+
+> Built for the [Nosana x ElizaOS Agent Challenge](https://superteam.fun/earn/listing/nosana-builders-elizaos-challenge/)
+
+SolRoast is an AI agent that analyzes your Solana wallet and **roasts you based on your on-chain activity**. Powered by ElizaOS, deployed on Nosana's decentralized GPU network, and running the Qwen3.5-27B model.
+
+---
+
+## What It Does
+
+Give SolRoast your Solana wallet address and it will:
+1. Fetch your SOL balance and token holdings via [Helius API](https://helius.dev)
+2. Feed the data to Qwen3.5-27B running on Nosana's GPU network
+3. Generate a savage, funny roast about your crypto portfolio
+
+---
+
+## Running Locally
+
+### 1. Install dependencies
+
+```bash
+bun install
+bun install -g @elizaos/cli
+```
+
+### 2. Configure environment
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env` and fill in:
+
+```env
+# Nosana LLM endpoint (get current URL from Nosana Discord)
+OPENAI_BASE_URL=https://<nosana-node>.node.k8s.prd.nos.ci/v1
+OPENAI_API_KEY=nosana
+MODEL_NAME=Qwen3.5-27B-AWQ-4bit
+
+# Helius API key for on-chain data (get at helius.dev)
+HELIUS_API_KEY=your_helius_api_key
+```
+
+> **Note:** The Nosana LLM endpoint URL changes periodically. Get the latest URL from the [Nosana Discord](https://nosana.com/discord).
+
+### 3. Start the servers
+
+**Two terminals required:**
+
+```bash
+# Terminal 1 — ElizaOS agent (port 3000)
+bun run dev
+
+# Terminal 2 — SolRoast UI (port 8080)
+bun run frontend
+```
+
+Open **http://localhost:8080** in your browser.
+
+### How it works
+
+```
+Browser (8080)  →  ElizaOS REST API (3000)  →  Nosana LLM endpoint
+     ↑                     ↓
+  SolRoast UI         ROAST_WALLET action
+                           ↓
+                      Helius API (on-chain data)
+```
+
+---
+
+## Project Structure
+
+```
+├── characters/
+│   └── agent.character.json        # SolRoast agent personality & plugins
+├── src/
+│   └── index.ts                    # ROAST_WALLET custom action
+├── frontend/
+│   ├── index.html                  # SolRoast UI
+│   ├── style.css                   # Dark fire theme
+│   ├── app.js                      # ElizaOS API client
+│   └── server.js                   # Static file server (port 8080)
+├── nos_job_def/
+│   └── nosana_eliza_job_definition.json  # Nosana deployment config
+├── Dockerfile                      # Container config
+└── .env.example                    # Environment variable template
+```
+
+---
+
 # Nosana x ElizaOS Agent Challenge
 
 ![ElizaOS](./assets/NosanaXEliza.jpg)

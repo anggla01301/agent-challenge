@@ -25,7 +25,12 @@
  * 배포환경: 같은 origin에서 서빙되므로 상대 경로 '/api' 사용 가능하나,
  * 명시적으로 기록해둬 유지보수 편의성 향상.
  */
-const API_BASE = '/api';
+// 개발: ElizaOS가 3000번 포트에서 실행되므로 절대 URL 사용
+// 배포: 같은 origin에서 서빙될 경우 '/api'로 변경
+// 개발: ElizaOS가 3000번 포트에서 실행되므로 절대 URL 사용
+// 배포: 같은 origin에서 서빙될 경우 '/api'로 변경
+const API_BASE     = 'http://localhost:3000/api';
+const MESSAGING_BASE = 'http://localhost:3000/api/messaging';
 
 /**
  * 응답 폴링 설정.
@@ -182,8 +187,8 @@ async function fetchAgentId() {
 
       const data = await response.json();
 
-      // ElizaOS v2: 응답 구조가 { agents: [...] } 또는 [...] 일 수 있음
-      const agents = data.agents || data;
+      // ElizaOS v2 응답 구조: { success: true, data: { agents: [...] } }
+      const agents = data.data?.agents || data.agents || data;
 
       if (Array.isArray(agents) && agents.length > 0) {
         agentId = agents[0].id;
@@ -231,7 +236,7 @@ async function createSession(agentIdParam) {
     sessionStorage.setItem('solroast_user_id', userId);
   }
 
-  const response = await fetch(`${API_BASE}/sessions`, {
+  const response = await fetch(`${MESSAGING_BASE}/sessions`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -268,13 +273,13 @@ async function createSession(agentIdParam) {
  * @throws {Error} 전송 실패 시
  */
 async function sendMessage(sessionId, text) {
-  const response = await fetch(`${API_BASE}/sessions/${sessionId}/messages`, {
+  const response = await fetch(`${MESSAGING_BASE}/sessions/${sessionId}/messages`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      content: { text },
-      // transport: 'direct' → ElizaOS에게 직접 처리 방식으로 전송
-      transport: 'direct',
+      // ElizaOS v2: content는 객체가 아닌 문자열이어야 함
+      content: text,
+      transport: 'sync',
     }),
   });
 
@@ -304,7 +309,7 @@ async function pollForResponse(sessionId, sentAt) {
     await delay(POLL_INTERVAL_MS);
 
     try {
-      const response = await fetch(`${API_BASE}/sessions/${sessionId}/messages`);
+      const response = await fetch(`${MESSAGING_BASE}/sessions/${sessionId}/messages`);
 
       if (!response.ok) continue; // 일시적 오류면 재시도
 
