@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<!--
+  SolRoast Frontend
+  ─────────────────────────────────────────────────────────────
+  ElizaOS 에이전트와 통신하는 SolRoast 전용 UI.
+
+  전체 흐름:
+    1. 페이지 로드 → ElizaOS REST API에서 에이전트 ID 조회
+    2. 사용자가 지갑 주소 입력 후 ROAST 버튼 클릭
+    3. ElizaOS 세션 생성 (POST /api/sessions)
+    4. 메시지 전송 (POST /api/sessions/:id/messages)
+    5. 폴링으로 응답 수신 (GET /api/sessions/:id/messages)
+    6. 결과 화면에 렌더링
+
+  외부 의존성:
+    - style.css  : 모든 시각 스타일 (다크 테마 + 파이어 이펙트)
+    - app.js     : ElizaOS API 통신 및 UI 로직
+-->
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <!-- 모바일 반응형을 위한 뷰포트 설정 -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>🔥 SolRoast — Roast Your Solana Wallet</title>
+
+  <!-- Google Fonts: Space Grotesk (헤딩용 강렬한 폰트) + Inter (본문용) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap"
+    rel="stylesheet"
+  />
+
+  <!-- 메인 스타일시트 -->
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ═══════════════════════════════════════════════════════
+       배경 파티클 레이어
+       CSS animation으로 불꽃 파티클이 아래에서 위로 떠오르는 효과.
+       JavaScript 없이 순수 CSS로 구현. app.js에서 동적으로 추가됨.
+  ═══════════════════════════════════════════════════════ -->
+  <div class="particles" id="particles" aria-hidden="true"></div>
+
+  <!-- ═══════════════════════════════════════════════════════
+       메인 컨테이너
+       모든 콘텐츠를 감싸는 중앙 정렬 래퍼.
+  ═══════════════════════════════════════════════════════ -->
+  <div class="container">
+
+    <!-- ─── 헤더 섹션 ─── -->
+    <header class="header">
+      <!-- 로고 이모지 + 불꽃 애니메이션 -->
+      <div class="logo" aria-label="SolRoast 로고">
+        <span class="logo-fire" aria-hidden="true">🔥</span>
+        <span class="logo-text">SolRoast</span>
+        <span class="logo-fire" aria-hidden="true">🔥</span>
+      </div>
+
+      <!-- 서브타이틀 -->
+      <p class="tagline">
+        Submit your Solana wallet.<br />
+        <span class="tagline-highlight">We'll destroy it.</span>
+      </p>
+
+      <!-- Nosana 배지: 이 에이전트가 Nosana 인프라 위에서 실행됨을 표시 -->
+      <div class="powered-badge" title="Nosana 탈중앙화 GPU 네트워크 위에서 실행">
+        <span class="badge-dot" aria-hidden="true"></span>
+        Powered by Nosana Decentralized GPU
+      </div>
+    </header>
+
+    <!-- ─── 입력 섹션 ─── -->
+    <section class="input-section" aria-label="지갑 주소 입력">
+      <div class="input-card">
+
+        <!-- 입력 카드 상단 라벨 -->
+        <label class="input-label" for="walletInput">
+          <span class="label-icon" aria-hidden="true">💀</span>
+          Enter your Solana wallet address
+        </label>
+
+        <!-- 입력 필드 + 버튼 묶음 -->
+        <div class="input-row">
+          <input
+            id="walletInput"
+            class="wallet-input"
+            type="text"
+            placeholder="7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU"
+            aria-label="Solana 지갑 주소"
+            autocomplete="off"
+            spellcheck="false"
+            maxlength="44"
+          />
+          <!-- ROAST 버튼: 클릭 시 app.js의 handleRoast() 호출 -->
+          <button
+            id="roastBtn"
+            class="roast-btn"
+            onclick="handleRoast()"
+            aria-label="지갑 roast 시작"
+          >
+            <span class="btn-text">ROAST IT</span>
+            <!-- 로딩 스피너: 분석 중에만 표시 -->
+            <span class="btn-spinner" aria-hidden="true"></span>
+          </button>
+        </div>
+
+        <!-- 에러 메시지 영역: 유효하지 않은 주소 입력 시 표시 -->
+        <p class="error-msg" id="errorMsg" role="alert" aria-live="polite"></p>
+
+      </div>
+    </section>
+
+    <!-- ─── 로딩 상태 섹션 ─── -->
+    <!--
+      app.js가 분석 중일 때 표시.
+      기본 상태: display:none → showLoading()에서 활성화
+    -->
+    <section class="loading-section" id="loadingSection" aria-live="polite" aria-label="분석 중">
+      <div class="loading-card">
+        <!-- 회전하는 불꽃 아이콘 -->
+        <div class="loading-fire" aria-hidden="true">🔥</div>
+        <!-- 단계별 상태 메시지: app.js가 텍스트를 업데이트함 -->
+        <p class="loading-text" id="loadingText">Analyzing wallet...</p>
+        <!-- 3개 점이 순차적으로 깜빡이는 진행 인디케이터 -->
+        <div class="loading-dots" aria-hidden="true">
+          <span></span><span></span><span></span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── 결과 섹션 ─── -->
+    <!--
+      분석 완료 후 결과를 표시하는 섹션.
+      기본 상태: display:none → showResult()에서 활성화
+    -->
+    <section class="result-section" id="resultSection" aria-label="분석 결과">
+
+      <!-- 지갑 통계 카드 -->
+      <div class="stats-card" id="statsCard">
+        <h2 class="stats-title">
+          <span aria-hidden="true">📊</span> Wallet Stats
+        </h2>
+        <div class="stats-grid">
+          <!-- SOL 잔액 -->
+          <div class="stat-item">
+            <span class="stat-label">SOL Balance</span>
+            <!-- app.js가 이 요소의 textContent를 업데이트 -->
+            <span class="stat-value sol-value" id="statSol">—</span>
+          </div>
+          <!-- 보유 토큰 수 -->
+          <div class="stat-item">
+            <span class="stat-label">Tokens</span>
+            <span class="stat-value" id="statTokens">—</span>
+          </div>
+          <!-- 지갑 주소 (앞 8자만 표시) -->
+          <div class="stat-item stat-item--wide">
+            <span class="stat-label">Wallet</span>
+            <span class="stat-value stat-address" id="statAddress">—</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Roast 결과 카드 -->
+      <div class="roast-card" id="roastCard">
+        <!-- 카드 헤더 -->
+        <div class="roast-header">
+          <span class="roast-badge" aria-label="AI Roast">🤖 AI ROAST</span>
+          <!-- 모델명 배지: AI가 Nosana 위의 Qwen 모델로 생성했음을 표시 -->
+          <span class="model-badge" aria-label="사용된 AI 모델">Qwen3.5-27B · Nosana</span>
+        </div>
+
+        <!-- 실제 roast 텍스트가 들어가는 곳 -->
+        <!-- app.js의 typewriterEffect()가 한 글자씩 타이핑 애니메이션으로 채움 -->
+        <blockquote class="roast-text" id="roastText" aria-live="polite"></blockquote>
+
+        <!-- 공유 + 다시하기 버튼 영역 -->
+        <div class="result-actions">
+          <!-- 클립보드에 roast 텍스트 복사 -->
+          <button
+            class="action-btn action-btn--copy"
+            onclick="copyRoast()"
+            aria-label="roast 텍스트 복사"
+          >
+            <span aria-hidden="true">📋</span> Copy Roast
+          </button>
+          <!-- X(트위터)에 공유 -->
+          <button
+            class="action-btn action-btn--share"
+            onclick="shareOnX()"
+            aria-label="X에 공유"
+          >
+            <span aria-hidden="true">𝕏</span> Share on X
+          </button>
+          <!-- 입력 섹션으로 되돌아가 새 주소 입력 -->
+          <button
+            class="action-btn action-btn--reset"
+            onclick="resetUI()"
+            aria-label="처음으로 돌아가기"
+          >
+            <span aria-hidden="true">🔄</span> Roast Another
+          </button>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ─── 푸터 ─── -->
+    <footer class="footer">
+      <p>
+        Built on
+        <a href="https://elizaos.ai" target="_blank" rel="noopener noreferrer">ElizaOS</a>
+        ·
+        Deployed on
+        <a href="https://nosana.com" target="_blank" rel="noopener noreferrer">Nosana</a>
+        ·
+        Data by
+        <a href="https://helius.dev" target="_blank" rel="noopener noreferrer">Helius</a>
+      </p>
+    </footer>
+
+  </div><!-- /.container -->
+
+  <!-- ═══════════════════════════════════════════════════════
+       메인 애플리케이션 스크립트
+       defer: HTML 파싱 완료 후 실행되어 DOM 요소를 안전하게 참조 가능
+  ═══════════════════════════════════════════════════════ -->
+  <script src="app.js" defer></script>
+
+</body>
+</html>

@@ -1,0 +1,771 @@
+/*
+  SolRoast — style.css
+  ══════════════════════════════════════════════════════════════
+  디자인 시스템:
+    - 베이스 컬러: 다크 배경 (#0a0a0f)
+    - 파이어 팔레트: #ff4500 → #ff8c00 → #ffd700 (오렌지/레드 그라데이션)
+    - Solana 보라: #9945ff
+    - 강조 초록: #00ffa3 (SOL 잔액 표시)
+    - 폰트: Space Grotesk (헤딩), Inter (본문), JetBrains Mono (코드/주소)
+
+  구조:
+    1. CSS 변수 (디자인 토큰)
+    2. 리셋 & 베이스
+    3. 배경 파티클 애니메이션
+    4. 레이아웃 (컨테이너, 헤더)
+    5. 입력 섹션
+    6. 로딩 상태
+    7. 결과 섹션 (통계 카드, roast 카드)
+    8. 버튼 & 액션
+    9. 푸터
+    10. 반응형
+    11. 유틸리티 & 애니메이션 키프레임
+*/
+
+/* ══════════════════════════════════════════════════════════════
+   1. CSS 변수 (디자인 토큰)
+   모든 색상/간격/그림자를 변수로 관리해 일관성 유지.
+══════════════════════════════════════════════════════════════ */
+:root {
+  /* 배경 색상 */
+  --bg-base:       #0a0a0f;   /* 최하단 배경 */
+  --bg-card:       #12121a;   /* 카드 배경 */
+  --bg-card-hover: #1a1a26;   /* 카드 호버 */
+  --bg-input:      #0d0d18;   /* 인풋 배경 */
+
+  /* 파이어 팔레트 */
+  --fire-red:    #ff2200;
+  --fire-orange: #ff6600;
+  --fire-mid:    #ff8c00;
+  --fire-yellow: #ffd700;
+
+  /* 브랜드 색상 */
+  --solana-purple: #9945ff;   /* Solana 공식 보라 */
+  --sol-green:     #00ffa3;   /* SOL 잔액 강조색 */
+
+  /* 텍스트 */
+  --text-primary:   #ffffff;
+  --text-secondary: #a0a0b8;
+  --text-muted:     #5a5a7a;
+
+  /* 테두리 */
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-fire:   rgba(255, 102, 0, 0.3);
+
+  /* 그림자 */
+  --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.6);
+  --shadow-fire: 0 0 40px rgba(255, 102, 0, 0.15);
+  --shadow-glow: 0 0 20px rgba(255, 68, 0, 0.4);
+
+  /* 간격 */
+  --space-xs: 0.25rem;
+  --space-sm: 0.5rem;
+  --space-md: 1rem;
+  --space-lg: 1.5rem;
+  --space-xl: 2rem;
+  --space-2xl: 3rem;
+
+  /* 둥근 모서리 */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+  --radius-xl: 28px;
+
+  /* 애니메이션 타이밍 */
+  --transition-fast: 150ms ease;
+  --transition-base: 250ms ease;
+  --transition-slow: 400ms ease;
+}
+
+
+/* ══════════════════════════════════════════════════════════════
+   2. 리셋 & 베이스
+══════════════════════════════════════════════════════════════ */
+
+/* box-sizing을 border-box로 통일 — padding/border가 width에 포함 */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  /* 부드러운 스크롤: 앵커 이동 시 스크롤 애니메이션 */
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: var(--bg-base);
+  color: var(--text-primary);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+  min-height: 100vh;
+  /* 배경에 미묘한 방사형 그라데이션 — 중앙에 불빛 느낌 */
+  background-image:
+    radial-gradient(ellipse 80% 60% at 50% -10%, rgba(255, 102, 0, 0.08) 0%, transparent 70%),
+    radial-gradient(ellipse 60% 40% at 80% 80%, rgba(153, 69, 255, 0.05) 0%, transparent 60%);
+  overflow-x: hidden; /* 가로 스크롤 방지 */
+}
+
+/* 기본 링크 스타일 초기화 */
+a {
+  color: var(--fire-orange);
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+a:hover {
+  color: var(--fire-yellow);
+}
+
+/* 버튼 기본 초기화 */
+button {
+  cursor: pointer;
+  border: none;
+  background: none;
+  font-family: inherit;
+}
+
+
+/* ══════════════════════════════════════════════════════════════
+   3. 배경 파티클 애니메이션
+   app.js가 .particles 컨테이너 안에 <span> 요소를 동적으로 추가.
+   각 파티클은 랜덤 위치·크기·딜레이로 설정되어 자연스러운 불꽃 효과.
+══════════════════════════════════════════════════════════════ */
+
+/* 파티클 컨테이너: 뷰포트 전체를 덮지만 클릭 이벤트는 통과시킴 */
+.particles {
+  position: fixed;
+  inset: 0;           /* top/right/bottom/left: 0 의 축약 */
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+
+/* 개별 파티클: app.js에서 inline style로 위치/딜레이/크기를 오버라이드 */
+.particle {
+  position: absolute;
+  bottom: -10px;              /* 화면 하단 바깥에서 시작 */
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--fire-orange);
+  opacity: 0;
+  animation: floatUp 6s ease-in infinite;
+}
+
+/* 파티클이 아래에서 위로 떠오르며 사라지는 애니메이션 */
+@keyframes floatUp {
+  0% {
+    transform: translateY(0) scale(1);
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 0.3;
+  }
+  100% {
+    /* translateY(-100vh): 화면 위쪽으로 완전히 벗어남 */
+    transform: translateY(-100vh) scale(0.2);
+    opacity: 0;
+  }
+}
+
+
+/* ══════════════════════════════════════════════════════════════
+   4. 레이아웃 — 컨테이너, 헤더
+══════════════════════════════════════════════════════════════ */
+
+/* 메인 컨테이너: 중앙 정렬 + 최대 너비 제한 */
+.container {
+  position: relative;
+  z-index: 1;       /* 파티클(.particles, z-index:0) 위에 렌더링 */
+  max-width: 680px;
+  margin: 0 auto;
+  padding: var(--space-xl) var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xl);
+}
+
+/* 헤더 섹션 */
+.header {
+  text-align: center;
+  padding: var(--space-2xl) 0 var(--space-lg);
+}
+
+/* 로고 줄: 🔥 SolRoast 🔥 */
+.logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-md);
+}
+
+/* 불꽃 이모지: 좌우로 흔들리는 애니메이션 */
+.logo-fire {
+  font-size: 2.5rem;
+  animation: sway 2s ease-in-out infinite alternate;
+  display: inline-block;
+}
+/* 짝수 번째 불꽃은 반대 방향으로 흔들림 */
+.logo-fire:last-child {
+  animation-direction: alternate-reverse;
+}
+
+@keyframes sway {
+  from { transform: rotate(-8deg) scale(1); }
+  to   { transform: rotate(8deg) scale(1.1); }
+}
+
+/* "SolRoast" 텍스트: 불꽃 그라데이션 */
+.logo-text {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 3rem;
+  font-weight: 800;
+  /* 그라데이션 텍스트 기법:
+     background-clip: text → 텍스트 모양으로 배경 클리핑
+     -webkit-text-fill-color: transparent → 텍스트 색을 투명하게 해 배경이 보이게 */
+  background: linear-gradient(135deg, var(--fire-red), var(--fire-orange), var(--fire-yellow));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  letter-spacing: -1px;
+  /* 텍스트 뒤에 미묘한 불빛 글로우 효과 */
+  filter: drop-shadow(0 0 20px rgba(255, 102, 0, 0.5));
+}
+
+/* 서브타이틀 */
+.tagline {
+  font-size: 1.1rem;
+  color: var(--text-secondary);
+  line-height: 1.7;
+  margin-bottom: var(--space-lg);
+}
+
+/* "We'll destroy it." — 강조 텍스트 */
+.tagline-highlight {
+  color: var(--fire-orange);
+  font-weight: 600;
+}
+
+/* Nosana 배지: 초록 점 + 텍스트 */
+.powered-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  background: rgba(153, 69, 255, 0.1);
+  border: 1px solid rgba(153, 69, 255, 0.3);
+  border-radius: 100px;   /* pill 형태 */
+  padding: var(--space-xs) var(--space-md);
+  font-size: 0.8rem;
+  color: #c084fc;         /* 연보라색 텍스트 */
+  font-weight: 500;
+}
+
+/* 살아있는 초록 점: 깜빡임으로 "실행 중" 상태 표시 */
+.badge-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--sol-green);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.5; transform: scale(0.8); }
+}
+
+
+/* ══════════════════════════════════════════════════════════════
+   5. 입력 섹션
+══════════════════════════════════════════════════════════════ */
+
+/* 입력 카드: 유리 질감(glassmorphism) */
+.input-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-fire);
+  border-radius: var(--radius-xl);
+  padding: var(--space-xl);
+  box-shadow: var(--shadow-card), var(--shadow-fire);
+  /* 카드 진입 시 아래에서 올라오는 애니메이션 */
+  animation: slideUp 0.5s ease-out both;
+}
+
+@keyframes slideUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+/* 입력 필드 라벨 */
+.input-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: var(--space-md);
+}
+
+.label-icon {
+  font-size: 1rem;
+}
+
+/* 인풋 + 버튼 가로 배치 */
+.input-row {
+  display: flex;
+  gap: var(--space-sm);
+}
+
+/* 지갑 주소 인풋 */
+.wallet-input {
+  flex: 1;   /* 남은 공간 모두 차지 */
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--space-md) var(--space-lg);
+  color: var(--text-primary);
+  /* 모노스페이스: Solana 주소는 코드 폰트가 가독성 좋음 */
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.9rem;
+  outline: none;
+  transition: border-color var(--transition-base), box-shadow var(--transition-base);
+  /* 텍스트가 넘칠 때 말줄임표 */
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 포커스 상태: 파이어 색상 테두리 + 글로우 */
+.wallet-input:focus {
+  border-color: var(--fire-orange);
+  box-shadow: 0 0 0 3px rgba(255, 102, 0, 0.15);
+}
+
+/* 플레이스홀더 색상 */
+.wallet-input::placeholder {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+/* 에러 메시지: 기본적으로 숨겨져 있다가 app.js가 텍스트를 넣으면 표시 */
+.error-msg {
+  margin-top: var(--space-sm);
+  font-size: 0.85rem;
+  color: #ff6b6b;     /* 빨간 계열 */
+  min-height: 1.2em;  /* 에러 없을 때도 공간 유지 (레이아웃 흔들림 방지) */
+}
+
+
+/* ══════════════════════════════════════════════════════════════
+   ROAST IT 버튼
+   상태: 기본 / 호버 / 로딩(disabled) / 클릭(active)
+══════════════════════════════════════════════════════════════ */
+
+.roast-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  /* 불꽃 그라데이션 배경 */
+  background: linear-gradient(135deg, var(--fire-red), var(--fire-orange));
+  color: #fff;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  border-radius: var(--radius-md);
+  padding: var(--space-md) var(--space-xl);
+  white-space: nowrap;  /* 텍스트 줄바꿈 방지 */
+  position: relative;
+  overflow: hidden;
+  transition: transform var(--transition-fast), box-shadow var(--transition-base);
+  /* 기본 그림자 */
+  box-shadow: 0 4px 15px rgba(255, 68, 0, 0.4);
+}
+
+/* 버튼 위에 광택 오버레이: ::before 가상 요소 */
+.roast-btn::before {
+  content: '';
+  position: absolute;
+  top: 0; left: -100%;
+  width: 100%; height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
+  transition: left 0.4s ease;
+}
+
+/* 호버: 광택 오버레이가 오른쪽으로 스윕 + 위로 살짝 떠오름 */
+.roast-btn:hover::before { left: 100%; }
+.roast-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 25px rgba(255, 68, 0, 0.6);
+}
+
+/* 클릭: 살짝 눌리는 효과 */
+.roast-btn:active {
+  transform: translateY(0) scale(0.98);
+}
+
+/* 로딩 중(disabled): 배경색 흐리게 + 커서 변경 */
+.roast-btn:disabled {
+  background: linear-gradient(135deg, #7a2200, #7a4400);
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* 버튼 텍스트: 로딩 중에는 숨겨짐 */
+.btn-text { }
+
+/* 로딩 스피너:
+   border의 한 면만 투명하게 해서 회전시키면 스피너 효과
+   기본: display:none → app.js가 .loading 클래스 추가 시 표시 */
+.btn-spinner {
+  display: none;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+/* 버튼에 .loading 클래스가 붙으면: 텍스트 숨기고 스피너 표시 */
+.roast-btn.loading .btn-text    { display: none; }
+.roast-btn.loading .btn-spinner { display: block; }
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+
+/* ══════════════════════════════════════════════════════════════
+   6. 로딩 상태 섹션
+══════════════════════════════════════════════════════════════ */
+
+/* 기본: 숨김 상태. app.js의 showLoading()이 display:flex로 변경 */
+.loading-section {
+  display: none;
+  justify-content: center;
+}
+
+.loading-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-fire);
+  border-radius: var(--radius-xl);
+  padding: var(--space-2xl);
+  text-align: center;
+  animation: slideUp 0.3s ease-out;
+  box-shadow: var(--shadow-card), var(--shadow-fire);
+  width: 100%;
+}
+
+/* 회전하는 불꽃 이모지 */
+.loading-fire {
+  font-size: 3rem;
+  display: inline-block;
+  animation: spin 1s linear infinite;
+  margin-bottom: var(--space-md);
+}
+
+.loading-text {
+  color: var(--text-secondary);
+  font-size: 1rem;
+  margin-bottom: var(--space-md);
+}
+
+/* 3개의 점이 순서대로 위아래로 움직이는 인디케이터 */
+.loading-dots {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-sm);
+}
+
+.loading-dots span {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--fire-orange);
+  animation: bounce 1.2s ease-in-out infinite;
+}
+
+/* 각 점의 애니메이션 딜레이를 다르게 해 순차적 효과 */
+.loading-dots span:nth-child(2) { animation-delay: 0.2s; }
+.loading-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes bounce {
+  0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
+  40%            { transform: translateY(-8px); opacity: 1; }
+}
+
+
+/* ══════════════════════════════════════════════════════════════
+   7. 결과 섹션
+══════════════════════════════════════════════════════════════ */
+
+/* 기본: 숨김. app.js의 showResult()가 display:flex로 변경 */
+.result-section {
+  display: none;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+/* ── 지갑 통계 카드 ── */
+.stats-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xl);
+  padding: var(--space-xl);
+  box-shadow: var(--shadow-card);
+  animation: slideUp 0.4s ease-out;
+}
+
+.stats-title {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: var(--space-lg);
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+/* 3열 그리드: SOL / Tokens / Wallet */
+.stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-md);
+}
+
+/* Wallet 주소는 두 칸 너비 */
+.stat-item--wide {
+  grid-column: 1 / -1;  /* 첫 열부터 마지막 열까지 */
+}
+
+.stat-item {
+  background: var(--bg-input);
+  border-radius: var(--radius-md);
+  padding: var(--space-md) var(--space-lg);
+}
+
+.stat-label {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: var(--space-xs);
+}
+
+.stat-value {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+/* SOL 잔액: Solana 초록으로 강조 */
+.sol-value {
+  color: var(--sol-green);
+  text-shadow: 0 0 15px rgba(0, 255, 163, 0.3);
+}
+
+/* 지갑 주소: 모노스페이스 폰트 + 작은 크기 */
+.stat-address {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  word-break: break-all;  /* 긴 주소가 넘칠 때 줄바꿈 */
+}
+
+
+/* ── Roast 결과 카드 ── */
+.roast-card {
+  background: var(--bg-card);
+  /* 미묘한 파이어 그라데이션 테두리 */
+  border: 1px solid var(--border-fire);
+  border-radius: var(--radius-xl);
+  padding: var(--space-xl);
+  box-shadow: var(--shadow-card), var(--shadow-fire);
+  animation: slideUp 0.5s ease-out 0.1s both; /* 통계 카드보다 0.1s 늦게 등장 */
+}
+
+/* 카드 상단: AI ROAST 배지 + 모델명 배지 */
+.roast-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-lg);
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+/* "🤖 AI ROAST" 배지 */
+.roast-badge {
+  background: linear-gradient(135deg, var(--fire-red), var(--fire-orange));
+  color: #fff;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  padding: var(--space-xs) var(--space-md);
+  border-radius: 100px;
+}
+
+/* "Qwen3.5-27B · Nosana" 모델 배지 */
+.model-badge {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  background: var(--bg-input);
+  padding: var(--space-xs) var(--space-md);
+  border-radius: 100px;
+  border: 1px solid var(--border-subtle);
+}
+
+/* Roast 텍스트:
+   타이핑 애니메이션 중 커서 표시를 위해 ::after 가상 요소 사용 */
+.roast-text {
+  font-size: 1.1rem;
+  line-height: 1.8;
+  color: var(--text-primary);
+  font-style: italic;
+  border-left: 3px solid var(--fire-orange);
+  padding-left: var(--space-lg);
+  margin-bottom: var(--space-xl);
+  min-height: 3em;  /* 타이핑 시작 전 공간 확보 */
+  position: relative;
+}
+
+/* 타이핑 커서: .typing 클래스가 있을 때만 표시 */
+.roast-text.typing::after {
+  content: '|';
+  color: var(--fire-orange);
+  animation: blink 0.7s step-end infinite;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0; }
+}
+
+
+/* ══════════════════════════════════════════════════════════════
+   8. 버튼 & 액션 (결과 하단)
+══════════════════════════════════════════════════════════════ */
+
+.result-actions {
+  display: flex;
+  gap: var(--space-sm);
+  flex-wrap: wrap;  /* 모바일에서 줄바꿈 허용 */
+}
+
+/* 공통 액션 버튼 스타일 */
+.action-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-input);
+  color: var(--text-secondary);
+  transition: all var(--transition-fast);
+}
+
+.action-btn:hover {
+  border-color: var(--fire-orange);
+  color: var(--text-primary);
+  transform: translateY(-1px);
+}
+
+/* Copy 버튼: 복사 성공 시 초록색으로 바뀜 (app.js에서 처리) */
+.action-btn--copy:hover  { background: rgba(0, 255, 163, 0.05); }
+
+/* Share on X 버튼 */
+.action-btn--share:hover { background: rgba(29, 161, 242, 0.05); }
+
+/* Roast Another 버튼: 파이어 컬러 강조 */
+.action-btn--reset {
+  border-color: var(--border-fire);
+  color: var(--fire-orange);
+}
+.action-btn--reset:hover {
+  background: rgba(255, 102, 0, 0.1);
+}
+
+
+/* ══════════════════════════════════════════════════════════════
+   9. 푸터
+══════════════════════════════════════════════════════════════ */
+
+.footer {
+  text-align: center;
+  padding: var(--space-lg) 0;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.footer a {
+  color: var(--text-muted);
+  transition: color var(--transition-fast);
+}
+.footer a:hover {
+  color: var(--fire-orange);
+}
+
+
+/* ══════════════════════════════════════════════════════════════
+   10. 반응형 (모바일 breakpoint: 480px)
+══════════════════════════════════════════════════════════════ */
+
+@media (max-width: 480px) {
+  /* 컨테이너 패딩 축소 */
+  .container {
+    padding: var(--space-lg) var(--space-md);
+  }
+
+  /* 로고 텍스트 크기 축소 */
+  .logo-text {
+    font-size: 2rem;
+  }
+
+  /* 인풋 + 버튼을 세로 배치 */
+  .input-row {
+    flex-direction: column;
+  }
+
+  /* 버튼 전체 너비로 확장 */
+  .roast-btn {
+    width: 100%;
+    padding: var(--space-md);
+  }
+
+  /* 입력 카드 패딩 축소 */
+  .input-card {
+    padding: var(--space-lg);
+  }
+
+  /* 통계 그리드: 1열로 변경 */
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+  .stat-item--wide {
+    grid-column: auto;
+  }
+
+  /* roast 텍스트 크기 축소 */
+  .roast-text {
+    font-size: 1rem;
+  }
+}
