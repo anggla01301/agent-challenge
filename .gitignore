@@ -95,3 +95,7 @@ bun.lockb
 
 # Ai
 .claude
+
+# IDE
+.idea/
+*.iml
