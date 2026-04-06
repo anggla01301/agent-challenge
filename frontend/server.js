@@ -65,6 +65,17 @@ const MIME_TYPES = {
  * @param {http.ServerResponse}  res - 응답 객체
  */
 function requestHandler(req, res) {
+  // CORS 헤더 — 로컬 개발 시 프론트엔드(8080)에서 ElizaOS API(3000) 호출 허용
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (req.method === 'OPTIONS') {
+    res.writeHead(200);
+    res.end();
+    return;
+  }
+
   // URL에서 쿼리스트링과 해시 제거
   let urlPath = req.url.split('?')[0].split('#')[0];
 

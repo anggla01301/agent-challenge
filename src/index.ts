@@ -68,8 +68,8 @@ async function generateRoast(prompt: string): Promise<string> {
   // Nosana 인증 키 (.env의 OPENAI_API_KEY = "nosana")
   const apiKey = process.env.OPENAI_API_KEY || "nosana";
 
-  // 사용할 모델명 (기본값: Qwen/Qwen3.5-4B)
-  const model = process.env.MODEL_NAME || "Qwen/Qwen3.5-4B";
+  // 사용할 모델명 (기본값: Qwen3.5-27B-AWQ-4bit)
+  const model = process.env.MODEL_NAME || "Qwen3.5-27B-AWQ-4bit";
 
   const res = await fetch(`${apiUrl}/chat/completions`, {
     method: "POST",
@@ -165,7 +165,7 @@ Short savage roast:`;
       }
     } catch (err) {
       // 온체인 조회 또는 LLM 호출 실패 시 에러 메시지 반환
-      if (callback) await callback({ text: `❌ 오류 발생: ${err}` });
+      if (callback) await callback({ text: `❌ 오류 발생: ${err instanceof Error ? err.message : String(err)}` });
     }
   },
 

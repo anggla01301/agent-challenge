@@ -9,7 +9,7 @@
       "type": "container/run",
       "id": "eliza-agent",
       "args": {
-        "image": "anggla01301/nosana-eliza-agent:latest",
+        "image": "anggla/nosana-eliza-agent:latest",
         "ports": ["3000:3000"],
         "env": {
           "OPENAI_API_KEY": "nosana",
@@ -21,6 +21,7 @@
           "OPENAI_EMBEDDING_API_KEY": "nosana",
           "OPENAI_EMBEDDING_MODEL": "Qwen3-Embedding-0.6B",
           "OPENAI_EMBEDDING_DIMENSIONS": "1024",
+          "HELIUS_API_KEY": "",
           "SERVER_PORT": "3000",
           "NODE_ENV": "production"
         }

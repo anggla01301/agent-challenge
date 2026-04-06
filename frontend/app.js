@@ -27,8 +27,6 @@
  */
 // 개발: ElizaOS가 3000번 포트에서 실행되므로 절대 URL 사용
 // 배포: 같은 origin에서 서빙될 경우 '/api'로 변경
-// 개발: ElizaOS가 3000번 포트에서 실행되므로 절대 URL 사용
-// 배포: 같은 origin에서 서빙될 경우 '/api'로 변경
 const API_BASE     = 'http://localhost:3000/api';
 const MESSAGING_BASE = 'http://localhost:3000/api/messaging';
 
@@ -213,7 +211,7 @@ async function fetchAgentId() {
 /**
  * ElizaOS 세션을 생성한다.
  *
- * 엔드포인트: POST /api/sessions
+ * 엔드포인트: POST /api/messaging/sessions
  * 요청 바디: { agentId, userId }
  * 응답 예시: { sessionId: "uuid", channelId: "uuid", ... }
  *
@@ -299,7 +297,7 @@ async function sendMessage(sessionId, text) {
  * ElizaOS는 메시지를 비동기로 처리하므로,
  * 에이전트가 응답을 추가할 때까지 주기적으로 GET 요청을 보낸다.
  *
- * 엔드포인트: GET /api/sessions/:sessionId/messages
+ * 엔드포인트: GET /api/messaging/sessions/:sessionId/messages
  * 에이전트 응답 조건: role이 'agent' 또는 'assistant'이고 내 메시지 이후에 추가된 것
  *
  * @param {string} sessionId - 폴링할 세션 ID
@@ -451,12 +449,14 @@ function parseResponse(text, walletAddress) {
   let roast = text; // 파싱 실패 시 전체 텍스트를 roast로 표시
 
   // 첫 번째 줄에서 통계 파싱: "🔥 XXXXXXXX... | 1.2345 SOL | 12 tokens"
+  // 정확한 포맷 기준 파싱으로 roast 텍스트 내 SOL/tokens 언급과 혼동 방지
   const summaryLine = lines[0] || '';
-  const solMatch    = summaryLine.match(/([\d.]+)\s*SOL/);
-  const tokenMatch  = summaryLine.match(/(\d+)\s*token/);
+  const summaryMatch = summaryLine.match(/🔥\s+\S+\s*\|\s*([\d.]+)\s*SOL\s*\|\s*(\d+)\s*tokens?/);
 
-  if (solMatch)   sol    = `${solMatch[1]} SOL`;
-  if (tokenMatch) tokens = tokenMatch[1];
+  if (summaryMatch) {
+    sol    = `${summaryMatch[1]} SOL`;
+    tokens = summaryMatch[2];
+  }
 
   // 빈 줄 이후의 텍스트가 실제 roast 내용
   const separatorIndex = text.indexOf('\n\n');
