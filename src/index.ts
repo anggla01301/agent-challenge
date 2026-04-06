@@ -80,8 +80,7 @@ async function generateRoast(prompt: string): Promise<string> {
     body: JSON.stringify({
       model,
       messages: [{ role: "user", content: prompt }],
-      // 200 토큰으로 제한 — TEXT_LARGE 에러 방지 및 응답 간결성 유지
-      max_tokens: 200,
+      max_tokens: 350,
     }),
   });
 
@@ -138,20 +137,46 @@ const roastWalletAction: Action = {
     const walletAddress = match[0];
 
     try {
-      // 분석 시작 알림 (사용자에게 진행 중임을 표시)
-      if (callback) await callback({ text: `🔍 ${walletAddress} 분석 중...` });
-
       // 온체인 데이터 조회
       const walletData = await getWalletData(walletAddress);
 
-      // roast 프롬프트 — 2~3문장으로 제한해 TEXT_LARGE 에러 방지
-      const prompt = `You are SolRoast. Roast this Solana wallet in 2-3 sentences max. Be savage and funny.
+      // 토큰 이름 목록 (최대 10개)
+      const tokenNames = walletData.tokens
+        .slice(0, 10)
+        .map((t: { symbol?: string; mint?: string }) => t.symbol || t.mint?.slice(0, 8))
+        .filter(Boolean)
+        .join(", ");
 
-Wallet: ${walletAddress}
-SOL: ${walletData.solBalance.toFixed(4)}
-Tokens: ${walletData.tokens.length}
+      // 랜덤 오프닝 스타일
+      const openingStyles = [
+        "BREAKING NEWS:",
+        "VERDICT:",
+        "Dear diary entry for this wallet:",
+        "Official analysis:",
+        "Attention:",
+        "Court has reached a decision:",
+        "This just in —",
+        "A eulogy for this portfolio:",
+      ];
+      const openingStyle = openingStyles[Math.floor(Math.random() * openingStyles.length)];
 
-Short savage roast:`;
+      const prompt = `You are SolRoast, a savage on-chain comedian. Roast this Solana wallet in 3-4 sentences.
+
+Wallet data:
+- Address: ${walletAddress}
+- SOL balance: ${walletData.solBalance.toFixed(4)}
+- Token count: ${walletData.tokens.length}
+- Tokens held: ${tokenNames || "none"}
+
+Rules:
+- Start with: "${openingStyle}"
+- Pick the single weirdest or most roastable signal from the wallet data and build the entire joke around it
+- Do NOT list numbers; turn this wallet into a character or tell a story
+- Do NOT use these overused phrases: "broke", "dust wallet", "cooked", "exit liquidity", "ngmi", "probably nothing"
+- End with one memorable final line: a nickname, verdict, curse, or title for this wallet
+- Be creative, specific, and ruthlessly funny
+
+Roast:`;
 
       // Nosana LLM으로 roast 생성
       const roast = await generateRoast(prompt);

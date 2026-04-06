@@ -405,11 +405,30 @@ async function handleRoast() {
     const sessionId = await createSession(agentId);
     console.log(`[SolRoast] 세션 생성됨: ${sessionId}`);
 
-    // ── 5. 메시지 전송 & 응답 수신 (동기) ──
+    // ── 5. 메시지 전송 & 응답 수신 (실패 시 새 세션으로 1회 재시도) ──
     updateLoadingText('AI가 roast 작성 중... 🔥');
-    const msgResponse = await sendMessage(sessionId, `Roast this wallet: ${walletAddress}`);
+    const roastMessage = `Roast this Solana wallet: ${walletAddress}`;
 
-    const responseText = msgResponse?.agentResponse?.text;
+    let responseText = null;
+    let currentSessionId = sessionId;
+
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const msgResponse = await sendMessage(currentSessionId, roastMessage);
+      const text = msgResponse?.agentResponse?.text;
+
+      if (text && text.includes('🔥')) {
+        responseText = text;
+        break;
+      }
+
+      // 실패 시 새 세션 생성 후 재시도
+      if (attempt === 0) {
+        console.warn('[SolRoast] 재시도 중 (새 세션)...');
+        await delay(1000);
+        currentSessionId = await createSession(agentId);
+      }
+    }
+
     if (!responseText) {
       throw new Error('에이전트 응답을 받지 못했습니다.');
     }
