@@ -6,8 +6,8 @@
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
-    "start": "elizaos start --character ./characters/agent.character.json",
-    "dev": "elizaos dev --character ./characters/agent.character.json",
+    "start": "elizaos start",
+    "dev": "elizaos dev",
     "frontend": "node frontend/server.js",
     "start:all": "elizaos start --character ./characters/agent.character.json & node frontend/server.js"
   },

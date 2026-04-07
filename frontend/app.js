@@ -34,8 +34,8 @@ const MESSAGING_BASE = 'http://localhost:3000/api/messaging';
  * 응답 폴링 설정 (현재 미사용 — 응답은 POST 바디에 동기적으로 수신).
  * 비동기 방식으로 전환 시를 대비해 유지.
  */
-const POLL_INTERVAL_MS  = 2000;
-const POLL_MAX_ATTEMPTS = 90;
+const POLL_INTERVAL_MS  = 3000;
+const POLL_MAX_ATTEMPTS = 100;
 
 /**
  * 타이핑 애니메이션 속도.
@@ -67,6 +67,7 @@ const PARTICLE_COUNT = 20;
  * @type {string|null}
  */
 let agentId = null;
+let socket = null;
 
 /**
  * 현재 표시된 roast 텍스트.
@@ -101,17 +102,86 @@ document.addEventListener('DOMContentLoaded', () => {
   // ElizaOS에서 에이전트 ID 조회 (백그라운드, UI 블로킹 없음)
   fetchAgentId();
 
+  // SocketIO 연결 초기화
+  initSocket();
+
   // 인풋 필드: Enter 키로 roast 시작
   const input = document.getElementById('walletInput');
   if (input) {
     input.addEventListener('keydown', (e) => {
-      // Enter(13) 키이고 버튼이 비활성 상태가 아닐 때만 실행
       if (e.key === 'Enter' && !document.getElementById('roastBtn').disabled) {
         handleRoast();
       }
     });
   }
 });
+
+/**
+ * SocketIO 연결 초기화.
+ * ElizaOS 서버(3000)에 연결하고 messageBroadcast 이벤트 수신 준비.
+ */
+function initSocket() {
+  const userId = getUserId();
+  socket = io('http://localhost:3000', {
+    auth: { entityId: userId },
+    transports: ['websocket', 'polling'],
+  });
+
+  socket.on('connect', () => {
+    console.log('[SolRoast] SocketIO 연결됨:', socket.id);
+  });
+
+  socket.on('disconnect', () => {
+    console.log('[SolRoast] SocketIO 연결 끊김');
+  });
+}
+
+/**
+ * 세션 채널에 SocketIO로 참여하고 roast 응답을 기다린다.
+ * @param {string} channelId - 참여할 채널 ID
+ * @param {string} sentAt - 메시지 전송 시각
+ * @returns {Promise<string>} roast 텍스트
+ */
+function waitForRoast(channelId, sentAt) {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      socket.off('messageBroadcast', onMessage);
+      reject(new Error('응답 타임아웃: 5분 내 응답 없음'));
+    }, 5 * 60 * 1000);
+
+    function onMessage(data) {
+      const text = data.text || '';
+      // 🔥 가 포함된 실제 roast 응답만 수신
+      if (data.roomId === channelId && text.includes('🔥') && text.length > 20) {
+        clearTimeout(timeout);
+        socket.off('messageBroadcast', onMessage);
+        resolve(text);
+      }
+    }
+
+    // 채널 참여
+    socket.emit('1', {
+      channelId,
+      agentId,
+      entityId: getUserId(),
+      messageServerId: '00000000-0000-0000-0000-000000000000',
+    });
+
+    socket.on('messageBroadcast', onMessage);
+  });
+}
+
+/**
+ * userId를 sessionStorage에서 가져오거나 새로 생성.
+ */
+function getUserId() {
+  let userId = sessionStorage.getItem('solroast_user_id');
+  if (!userId) {
+    userId = crypto.randomUUID();
+    sessionStorage.setItem('solroast_user_id', userId);
+  }
+  return userId;
+}
 
 
 /* ══════════════════════════════════════════════════════════════
@@ -225,12 +295,7 @@ async function createSession(agentIdParam) {
    * 실제 인증 시스템이 없으므로 브라우저 세션마다 UUID를 생성.
    * sessionStorage: 탭을 닫으면 초기화 (localStorage보다 프라이버시 친화적)
    */
-  let userId = sessionStorage.getItem('solroast_user_id');
-  if (!userId) {
-    // crypto.randomUUID(): 브라우저 내장 UUID v4 생성기
-    userId = crypto.randomUUID();
-    sessionStorage.setItem('solroast_user_id', userId);
-  }
+  const userId = getUserId();
 
   const response = await fetch(`${MESSAGING_BASE}/sessions`, {
     method: 'POST',
@@ -250,11 +315,12 @@ async function createSession(agentIdParam) {
 
   // 응답 구조: { sessionId: "...", ... } 또는 { data: { sessionId: "..." } }
   const sessionId = data.sessionId || data.data?.sessionId;
+  const channelId = data.channelId || data.data?.channelId || sessionId;
   if (!sessionId) {
     throw new Error('세션 ID를 응답에서 찾을 수 없음');
   }
 
-  return sessionId;
+  return { sessionId, channelId };
 }
 
 /**
@@ -402,35 +468,21 @@ async function handleRoast() {
 
     // ── 4. 세션 생성 ──
     updateLoadingText('세션 생성 중...');
-    const sessionId = await createSession(agentId);
+    const { sessionId } = await createSession(agentId);
     console.log(`[SolRoast] 세션 생성됨: ${sessionId}`);
 
-    // ── 5. 메시지 전송 & 응답 수신 (실패 시 새 세션으로 1회 재시도) ──
+    // ── 5. 메시지 전송 & 응답 수신 ──
     updateLoadingText('AI가 roast 작성 중... 🔥');
     const roastMessage = `Roast this Solana wallet: ${walletAddress}`;
 
-    let responseText = null;
-    let currentSessionId = sessionId;
+    const msgResponse = await sendMessage(sessionId, roastMessage);
 
-    for (let attempt = 0; attempt < 2; attempt++) {
-      const msgResponse = await sendMessage(currentSessionId, roastMessage);
-      const text = msgResponse?.agentResponse?.text;
-
-      if (text && text.includes('🔥')) {
-        responseText = text;
-        break;
-      }
-
-      // 실패 시 새 세션 생성 후 재시도
-      if (attempt === 0) {
-        console.warn('[SolRoast] 재시도 중 (새 세션)...');
-        await delay(1000);
-        currentSessionId = await createSession(agentId);
-      }
-    }
+    // roast는 agentResponse.actionCallbacks.text에 있음
+    const responseText = msgResponse?.agentResponse?.actionCallbacks?.text
+      || msgResponse?.agentResponse?.text;
 
     if (!responseText) {
-      throw new Error('에이전트 응답을 받지 못했습니다.');
+      throw new Error('roast 응답을 받지 못했습니다.');
     }
 
     // ── 6. 결과 파싱 & 표시 ──
