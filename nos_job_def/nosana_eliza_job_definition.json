@@ -9,19 +9,20 @@
       "type": "container/run",
       "id": "eliza-agent",
       "args": {
-        "image": "anggla/nosana-eliza-agent:latest",
+        "image": "anggla/solroast:latest",
         "ports": ["3000:3000"],
         "env": {
           "OPENAI_API_KEY": "nosana",
-          "OPENAI_BASE_URL": "https://6vq2bcqphcansrs9b88ztxfs88oqy7etah2ugudytv2x.node.k8s.prd.nos.ci/v1",
-          "MODEL_NAME": "Qwen3.5-27B-AWQ-4bit",
-          "OPENAI_SMALL_MODEL": "Qwen3.5-27B-AWQ-4bit",
-          "OPENAI_LARGE_MODEL": "Qwen3.5-27B-AWQ-4bit",
+          "OPENAI_BASE_URL": "http://localhost:3001",
+          "OPENAI_BASE_URL_UPSTREAM": "https://5i8frj7ann99bbw9gzpprvzj2esugg39hxbb4unypskq.node.k8s.prd.nos.ci/v1",
+          "MODEL_NAME": "Qwen3.5-9B-FP8",
+          "OPENAI_SMALL_MODEL": "Qwen3.5-9B-FP8",
+          "OPENAI_LARGE_MODEL": "Qwen3.5-9B-FP8",
           "OPENAI_EMBEDDING_URL": "https://4yiccatpyxx773jtewo5ccwhw1s2hezq5pehndb6fcfq.node.k8s.prd.nos.ci/v1",
           "OPENAI_EMBEDDING_API_KEY": "nosana",
           "OPENAI_EMBEDDING_MODEL": "Qwen3-Embedding-0.6B",
           "OPENAI_EMBEDDING_DIMENSIONS": "1024",
-          "HELIUS_API_KEY": "",
+          "HELIUS_API_KEY": "your_helius_api_key",
           "SERVER_PORT": "3000",
           "NODE_ENV": "production"
         }

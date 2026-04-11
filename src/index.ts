@@ -39,6 +39,7 @@ async function generateRoast(prompt: string): Promise<string> {
       model,
       messages: [{ role: "user", content: prompt }],
       max_tokens: 350,
+      chat_template_kwargs: { enable_thinking: false },
     }),
   });
 

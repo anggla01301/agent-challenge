@@ -9,6 +9,7 @@
     "start": "elizaos start",
     "dev": "elizaos dev",
     "frontend": "node frontend/server.js",
+    "proxy": "node llm-proxy.js",
     "start:all": "elizaos start --character ./characters/agent.character.json & node frontend/server.js"
   },
   "dependencies": {

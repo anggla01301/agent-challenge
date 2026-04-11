@@ -37,4 +37,5 @@ EXPOSE 3000
 ENV NODE_ENV=production
 ENV SERVER_PORT=3000
 
-CMD ["pnpm", "start"]
+# 프록시(3001) + ElizaOS(3000) 동시 실행
+CMD ["sh", "-c", "node llm-proxy.js & pnpm start"]
