@@ -24,6 +24,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+const ELIZAOS_PORT = parseInt(process.env.SERVER_PORT || '3000', 10);
+
 // ES Module에서 __dirname 대체
 // __filename: 현재 파일의 절대 경로
 // __dirname:  현재 파일이 있는 디렉토리 경로
@@ -64,8 +66,24 @@ const MIME_TYPES = {
  * @param {http.IncomingMessage} req - 요청 객체
  * @param {http.ServerResponse}  res - 응답 객체
  */
+function proxyToEliza(req, res, body) {
+  const options = {
+    hostname: 'localhost',
+    port: ELIZAOS_PORT,
+    path: req.url,
+    method: req.method,
+    headers: { ...req.headers, host: `localhost:${ELIZAOS_PORT}` },
+  };
+  const proxyReq = http.request(options, proxyRes => {
+    res.writeHead(proxyRes.statusCode, proxyRes.headers);
+    proxyRes.pipe(res);
+  });
+  proxyReq.on('error', () => { res.writeHead(502); res.end('Bad Gateway'); });
+  if (body) proxyReq.write(body);
+  proxyReq.end();
+}
+
 function requestHandler(req, res) {
-  // CORS 헤더 — 로컬 개발 시 프론트엔드(8080)에서 ElizaOS API(3000) 호출 허용
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -73,6 +91,14 @@ function requestHandler(req, res) {
   if (req.method === 'OPTIONS') {
     res.writeHead(200);
     res.end();
+    return;
+  }
+
+  // /api, /socket.io 요청은 ElizaOS(3000)로 프록시
+  if (req.url.startsWith('/api') || req.url.startsWith('/socket.io')) {
+    let body = '';
+    req.on('data', c => { body += c; });
+    req.on('end', () => proxyToEliza(req, res, body));
     return;
   }
 

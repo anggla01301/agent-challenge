@@ -27,8 +27,8 @@
  */
 // 개발: ElizaOS가 3000번 포트에서 실행되므로 절대 URL 사용
 // 배포: 같은 origin에서 서빙될 경우 '/api'로 변경
-const API_BASE     = 'http://localhost:3000/api';
-const MESSAGING_BASE = 'http://localhost:3000/api/messaging';
+const API_BASE     = '/api';
+const MESSAGING_BASE = '/api/messaging';
 
 /**
  * 응답 폴링 설정 (현재 미사용 — 응답은 POST 바디에 동기적으로 수신).
@@ -122,7 +122,7 @@ document.addEventListener('DOMContentLoaded', () => {
  */
 function initSocket() {
   const userId = getUserId();
-  socket = io('http://localhost:3000', {
+  socket = io(window.location.origin, {
     auth: { entityId: userId },
     transports: ['websocket', 'polling'],
   });
