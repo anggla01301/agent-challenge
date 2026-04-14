@@ -1,0 +1,35 @@
+{
+  "ops": [
+    {
+      "id": "solroast-agent",
+      "args": {
+        "gpu": true,
+        "image": "docker.io/anggla/solroast:latest",
+        "expose": 3000,
+        "env": {
+          "OPENAI_BASE_URL": "http://localhost:3001",
+          "OPENAI_BASE_URL_UPSTREAM": "YOUR_NOSANA_LLM_ENDPOINT",
+          "OPENAI_API_KEY": "nosana",
+          "MODEL_NAME": "Qwen3.5-9B-FP8",
+          "OPENAI_SMALL_MODEL": "Qwen3.5-9B-FP8",
+          "OPENAI_LARGE_MODEL": "Qwen3.5-9B-FP8",
+          "OPENAI_EMBEDDING_URL": "YOUR_NOSANA_EMBEDDING_ENDPOINT",
+          "OPENAI_EMBEDDING_API_KEY": "nosana",
+          "OPENAI_EMBEDDING_MODEL": "Qwen3-Embedding-0.6B",
+          "OPENAI_EMBEDDING_DIMENSIONS": "1024",
+          "SERVER_PORT": "3000",
+          "HELIUS_API_KEY": "YOUR_HELIUS_API_KEY"
+        }
+      },
+      "type": "container/run"
+    }
+  ],
+  "meta": {
+    "trigger": "dashboard",
+    "system_requirements": {
+      "required_vram": 4
+    }
+  },
+  "type": "container",
+  "version": "0.1"
+}
