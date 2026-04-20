@@ -4,10 +4,10 @@
  * ElizaOS REST API와 통신해 SolRoast 에이전트를 구동하는 메인 스크립트.
  *
  * ElizaOS v2 메시지 플로우:
- *   1. GET  /api/agents              → 에이전트 ID 조회
- *   2. POST /api/sessions            → 세션 생성 (agentId + userId 필요)
- *   3. POST /api/sessions/:id/messages → 메시지 전송
- *   4. GET  /api/sessions/:id/messages → 응답 폴링
+ *   1. GET  /api/agents                   → 에이전트 ID 조회
+ *   2. POST /api/messaging/sessions       → 세션 생성 (agentId + userId 필요)
+ *   3. POST /api/messaging/sessions/:id/messages → 메시지 전송
+ *      └─ 응답이 POST 바디에 동기적으로 포함됨 (agentResponse.text)
  *
  * 모든 API 요청은 같은 출처(origin)의 ElizaOS 서버(포트 3000)로 보냄.
  * 프론트엔드도 같은 포트에서 서빙되므로 CORS 이슈 없음.
@@ -27,19 +27,15 @@
  */
 // 개발: ElizaOS가 3000번 포트에서 실행되므로 절대 URL 사용
 // 배포: 같은 origin에서 서빙될 경우 '/api'로 변경
-// 개발: ElizaOS가 3000번 포트에서 실행되므로 절대 URL 사용
-// 배포: 같은 origin에서 서빙될 경우 '/api'로 변경
-const API_BASE     = 'http://localhost:3000/api';
-const MESSAGING_BASE = 'http://localhost:3000/api/messaging';
+const API_BASE     = '/api';
+const MESSAGING_BASE = '/api/messaging';
 
 /**
- * 응답 폴링 설정.
- * ElizaOS는 메시지를 비동기로 처리하므로 주기적으로 새 메시지를 확인해야 함.
- * - POLL_INTERVAL_MS: 폴링 간격 (1.5초)
- * - POLL_MAX_ATTEMPTS: 최대 시도 횟수 (30회 × 1.5초 = 최대 45초 대기)
+ * 응답 폴링 설정 (현재 미사용 — 응답은 POST 바디에 동기적으로 수신).
+ * 비동기 방식으로 전환 시를 대비해 유지.
  */
-const POLL_INTERVAL_MS  = 1500;
-const POLL_MAX_ATTEMPTS = 30;
+const POLL_INTERVAL_MS  = 3000;
+const POLL_MAX_ATTEMPTS = 100;
 
 /**
  * 타이핑 애니메이션 속도.
@@ -71,6 +67,7 @@ const PARTICLE_COUNT = 20;
  * @type {string|null}
  */
 let agentId = null;
+let socket = null;
 
 /**
  * 현재 표시된 roast 텍스트.
@@ -105,17 +102,86 @@ document.addEventListener('DOMContentLoaded', () => {
   // ElizaOS에서 에이전트 ID 조회 (백그라운드, UI 블로킹 없음)
   fetchAgentId();
 
+  // SocketIO 연결 초기화
+  initSocket();
+
   // 인풋 필드: Enter 키로 roast 시작
   const input = document.getElementById('walletInput');
   if (input) {
     input.addEventListener('keydown', (e) => {
-      // Enter(13) 키이고 버튼이 비활성 상태가 아닐 때만 실행
       if (e.key === 'Enter' && !document.getElementById('roastBtn').disabled) {
         handleRoast();
       }
     });
   }
 });
+
+/**
+ * SocketIO 연결 초기화.
+ * ElizaOS 서버(3000)에 연결하고 messageBroadcast 이벤트 수신 준비.
+ */
+function initSocket() {
+  const userId = getUserId();
+  socket = io(window.location.origin, {
+    auth: { entityId: userId },
+    transports: ['websocket', 'polling'],
+  });
+
+  socket.on('connect', () => {
+    console.log('[SolRoast] SocketIO 연결됨:', socket.id);
+  });
+
+  socket.on('disconnect', () => {
+    console.log('[SolRoast] SocketIO 연결 끊김');
+  });
+}
+
+/**
+ * 세션 채널에 SocketIO로 참여하고 roast 응답을 기다린다.
+ * @param {string} channelId - 참여할 채널 ID
+ * @param {string} sentAt - 메시지 전송 시각
+ * @returns {Promise<string>} roast 텍스트
+ */
+function waitForRoast(channelId, sentAt) {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      socket.off('messageBroadcast', onMessage);
+      reject(new Error('응답 타임아웃: 5분 내 응답 없음'));
+    }, 5 * 60 * 1000);
+
+    function onMessage(data) {
+      const text = data.text || '';
+      // 🔥 가 포함된 실제 roast 응답만 수신
+      if (data.roomId === channelId && text.includes('🔥') && text.length > 20) {
+        clearTimeout(timeout);
+        socket.off('messageBroadcast', onMessage);
+        resolve(text);
+      }
+    }
+
+    // 채널 참여
+    socket.emit('1', {
+      channelId,
+      agentId,
+      entityId: getUserId(),
+      messageServerId: '00000000-0000-0000-0000-000000000000',
+    });
+
+    socket.on('messageBroadcast', onMessage);
+  });
+}
+
+/**
+ * userId를 sessionStorage에서 가져오거나 새로 생성.
+ */
+function getUserId() {
+  let userId = sessionStorage.getItem('solroast_user_id');
+  if (!userId) {
+    userId = crypto.randomUUID();
+    sessionStorage.setItem('solroast_user_id', userId);
+  }
+  return userId;
+}
 
 
 /* ══════════════════════════════════════════════════════════════
@@ -215,7 +281,7 @@ async function fetchAgentId() {
 /**
  * ElizaOS 세션을 생성한다.
  *
- * 엔드포인트: POST /api/sessions
+ * 엔드포인트: POST /api/messaging/sessions
  * 요청 바디: { agentId, userId }
  * 응답 예시: { sessionId: "uuid", channelId: "uuid", ... }
  *
@@ -229,12 +295,7 @@ async function createSession(agentIdParam) {
    * 실제 인증 시스템이 없으므로 브라우저 세션마다 UUID를 생성.
    * sessionStorage: 탭을 닫으면 초기화 (localStorage보다 프라이버시 친화적)
    */
-  let userId = sessionStorage.getItem('solroast_user_id');
-  if (!userId) {
-    // crypto.randomUUID(): 브라우저 내장 UUID v4 생성기
-    userId = crypto.randomUUID();
-    sessionStorage.setItem('solroast_user_id', userId);
-  }
+  const userId = getUserId();
 
   const response = await fetch(`${MESSAGING_BASE}/sessions`, {
     method: 'POST',
@@ -254,22 +315,26 @@ async function createSession(agentIdParam) {
 
   // 응답 구조: { sessionId: "...", ... } 또는 { data: { sessionId: "..." } }
   const sessionId = data.sessionId || data.data?.sessionId;
+  const channelId = data.channelId || data.data?.channelId || sessionId;
   if (!sessionId) {
     throw new Error('세션 ID를 응답에서 찾을 수 없음');
   }
 
-  return sessionId;
+  return { sessionId, channelId };
 }
 
 /**
- * 세션에 메시지를 전송한다.
+ * 세션에 메시지를 전송하고 에이전트 응답을 반환한다.
  *
- * 엔드포인트: POST /api/sessions/:sessionId/messages
- * 요청 바디: { content: { text: "..." } }
+ * 엔드포인트: POST /api/messaging/sessions/:sessionId/messages
+ * 요청 바디: { content: string }
+ *
+ * ElizaOS는 응답을 POST 바디에 동기적으로 포함해 반환한다.
+ * 응답 구조: { agentResponse: { text: string, ... }, ... }
  *
  * @param {string} sessionId - 대상 세션 ID
  * @param {string} text - 전송할 메시지 텍스트
- * @returns {Promise<void>}
+ * @returns {Promise<object>} ElizaOS 응답 객체 (agentResponse 포함)
  * @throws {Error} 전송 실패 시
  */
 async function sendMessage(sessionId, text) {
@@ -287,6 +352,9 @@ async function sendMessage(sessionId, text) {
     const errorText = await response.text();
     throw new Error(`메시지 전송 실패: HTTP ${response.status} — ${errorText}`);
   }
+
+  const responseData = await response.json().catch(() => null);
+  return responseData;
 }
 
 /**
@@ -295,7 +363,7 @@ async function sendMessage(sessionId, text) {
  * ElizaOS는 메시지를 비동기로 처리하므로,
  * 에이전트가 응답을 추가할 때까지 주기적으로 GET 요청을 보낸다.
  *
- * 엔드포인트: GET /api/sessions/:sessionId/messages
+ * 엔드포인트: GET /api/messaging/sessions/:sessionId/messages
  * 에이전트 응답 조건: role이 'agent' 또는 'assistant'이고 내 메시지 이후에 추가된 것
  *
  * @param {string} sessionId - 폴링할 세션 ID
@@ -322,11 +390,10 @@ async function pollForResponse(sessionId, sentAt) {
 
       // 에이전트가 보낸 메시지 중 내 메시지 이후 것 찾기
       const agentMessages = messages.filter((msg) => {
-        const isAgent = msg.role === 'agent' || msg.role === 'assistant';
+        const isAgent = msg.isAgent === true || msg.role === 'agent' || msg.role === 'assistant';
         const isAfterSend = new Date(msg.createdAt || msg.timestamp || 0).getTime() >= sentAt;
         return isAgent && isAfterSend;
       });
-
       if (agentMessages.length > 0) {
         // 가장 최근 메시지의 텍스트 반환
         const lastMsg = agentMessages[agentMessages.length - 1];
@@ -361,10 +428,9 @@ async function pollForResponse(sessionId, sentAt) {
  *   2. 로딩 UI 표시
  *   3. 에이전트 ID 확인 (없으면 재조회)
  *   4. 세션 생성
- *   5. 메시지 전송
- *   6. 응답 폴링
- *   7. 결과 파싱 & 표시
- *   8. 에러 처리
+ *   5. 메시지 전송 → POST 응답에서 agentResponse.text 추출
+ *   6. 결과 파싱 & 표시
+ *   7. 에러 처리
  */
 async function handleRoast() {
   // ── 1. 입력값 가져오기 & 유효성 검사 ──
@@ -402,19 +468,24 @@ async function handleRoast() {
 
     // ── 4. 세션 생성 ──
     updateLoadingText('세션 생성 중...');
-    const sessionId = await createSession(agentId);
+    const { sessionId } = await createSession(agentId);
     console.log(`[SolRoast] 세션 생성됨: ${sessionId}`);
 
-    // ── 5. 메시지 전송 ──
-    updateLoadingText(`🔍 ${walletAddress.slice(0, 8)}... 분석 중`);
-    const sentAt = Date.now();
-    await sendMessage(sessionId, `Roast this wallet: ${walletAddress}`);
-
-    // ── 6. 응답 폴링 ──
+    // ── 5. 메시지 전송 & 응답 수신 ──
     updateLoadingText('AI가 roast 작성 중... 🔥');
-    const responseText = await pollForResponse(sessionId, sentAt);
+    const roastMessage = `Roast this Solana wallet: ${walletAddress}`;
 
-    // ── 7. 결과 파싱 & 표시 ──
+    const msgResponse = await sendMessage(sessionId, roastMessage);
+
+    // roast는 agentResponse.actionCallbacks.text에 있음
+    const responseText = msgResponse?.agentResponse?.actionCallbacks?.text
+      || msgResponse?.agentResponse?.text;
+
+    if (!responseText) {
+      throw new Error('roast 응답을 받지 못했습니다.');
+    }
+
+    // ── 6. 결과 파싱 & 표시 ──
     const parsed = parseResponse(responseText, walletAddress);
     showResult(parsed);
 
@@ -449,12 +520,14 @@ function parseResponse(text, walletAddress) {
   let roast = text; // 파싱 실패 시 전체 텍스트를 roast로 표시
 
   // 첫 번째 줄에서 통계 파싱: "🔥 XXXXXXXX... | 1.2345 SOL | 12 tokens"
+  // 정확한 포맷 기준 파싱으로 roast 텍스트 내 SOL/tokens 언급과 혼동 방지
   const summaryLine = lines[0] || '';
-  const solMatch    = summaryLine.match(/([\d.]+)\s*SOL/);
-  const tokenMatch  = summaryLine.match(/(\d+)\s*token/);
+  const summaryMatch = summaryLine.match(/🔥\s+\S+\s*\|\s*([\d.]+)\s*SOL\s*\|\s*(\d+)\s*tokens?/);
 
-  if (solMatch)   sol    = `${solMatch[1]} SOL`;
-  if (tokenMatch) tokens = tokenMatch[1];
+  if (summaryMatch) {
+    sol    = `${summaryMatch[1]} SOL`;
+    tokens = summaryMatch[2];
+  }
 
   // 빈 줄 이후의 텍스트가 실제 roast 내용
   const separatorIndex = text.indexOf('\n\n');

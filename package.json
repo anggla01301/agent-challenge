@@ -3,11 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "main": "dist/index.js",
   "scripts": {
-    "start": "elizaos start --character ./characters/agent.character.json",
-    "dev": "elizaos dev --character ./characters/agent.character.json",
+    "build": "tsc",
+    "start": "elizaos start",
+    "dev": "elizaos dev",
     "frontend": "node frontend/server.js",
-    "start:all": "node -e \"const {spawn}=require('child_process');spawn('elizaos',['start','--character','./characters/agent.character.json'],{stdio:'inherit',shell:true});spawn('node',['frontend/server.js'],{stdio:'inherit'});\""
+    "proxy": "node llm-proxy.js",
+    "start:all": "elizaos start --character ./characters/agent.character.json & node frontend/server.js"
   },
   "dependencies": {
     "@elizaos/core": "^1.0.0",
@@ -18,6 +21,7 @@
   },
   "devDependencies": {
     "@elizaos/cli": "^1.0.0",
+    "@types/node": "^20.0.0",
     "typescript": "^5.0.0"
   }
 }
